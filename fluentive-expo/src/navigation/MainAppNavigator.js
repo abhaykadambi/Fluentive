@@ -7,6 +7,7 @@ import { IconButton } from 'react-native-paper';
 
 import HomeScreen from '../screens/HomeScreen';
 import ProfileScreen from '../screens/ProfileScreen';
+import SpeakScreen from '../screens/SpeakScreen';
 
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
@@ -45,6 +46,8 @@ const MainAppNavigator = () => {
             iconName = 'home';
           } else if (route.name === 'Profile') {
             iconName = 'account';
+          } else if (route.name === 'Speak') {
+            iconName = 'microphone';
           }
 
           return <IconButton icon={iconName} size={size} color={color} />;
@@ -56,6 +59,13 @@ const MainAppNavigator = () => {
         component={HomeScreen}
         options={{
           title: 'Home',
+        }}
+      />
+      <Tab.Screen 
+        name="Speak" 
+        component={SpeakScreen}
+        options={{
+          title: 'Speak',
         }}
       />
       <Tab.Screen 

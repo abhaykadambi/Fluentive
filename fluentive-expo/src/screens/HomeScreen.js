@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { useEffect, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { Text } from 'react-native-paper';
+import { StyleSheet, TouchableOpacity, View } from 'react-native';
+import { IconButton, Text } from 'react-native-paper';
 
 const HomeScreen = () => {
   const [userData, setUserData] = useState(null);
@@ -24,8 +24,18 @@ const HomeScreen = () => {
   return (
     <View style={styles.container}>
       <Text style={styles.welcomeText}>
-        Welcome{userData ? `, ${userData.name}` : ''}!
+        Welcome{userData ? `, ${userData.username}` : ''}!
       </Text>
+      
+      <TouchableOpacity style={styles.addLanguageBox}>
+        <IconButton
+          icon="plus"
+          size={24}
+          style={styles.plusIcon}
+        />
+        <Text style={styles.addLanguageText}>Add a new language</Text>
+      </TouchableOpacity>
+
       <Text style={styles.subtitle}>
         This is your home screen. More features coming soon!
       </Text>
@@ -42,9 +52,28 @@ const styles = StyleSheet.create({
   welcomeText: {
     fontSize: 24,
     fontWeight: 'bold',
-    marginBottom: 10,
+    marginBottom: 20,
   },
   subtitle: {
+    fontSize: 16,
+    color: '#666',
+    marginTop: 20,
+  },
+  addLanguageBox: {
+    backgroundColor: '#f5f5f5',
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderStyle: 'dashed',
+  },
+  plusIcon: {
+    margin: 0,
+    marginRight: 8,
+  },
+  addLanguageText: {
     fontSize: 16,
     color: '#666',
   },
