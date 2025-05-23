@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { CommonActions, createNativeStackNavigator } from '@react-navigation/native-stack';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import * as Updates from 'expo-updates';
 import React from 'react';
 import { IconButton } from 'react-native-paper';
 
@@ -23,13 +24,8 @@ const ProfileStack = () => (
             onPress={async () => {
               // Clear user data and token
               await AsyncStorage.multiRemove(['userToken', 'userData']);
-              // Use CommonActions to reset the root navigation
-              navigation.dispatch(
-                CommonActions.reset({
-                  index: 0,
-                  routes: [{ name: 'Login' }],
-                })
-              );
+              // Reload the app to trigger AppNavigator's token check
+              await Updates.reloadAsync();
             }}
           />
         ),
