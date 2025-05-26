@@ -21,6 +21,24 @@ const userSchema = new mongoose.Schema({
     required: true,
     minlength: 6
   },
+  languages: [{
+    name: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    proficiency: {
+      type: String,
+      required: true,
+      enum: ['Beginner', 'Intermediate', 'Advanced', 'Native'],
+      default: 'Beginner'
+    },
+    speakingTime: {
+      type: Number,  // Time in minutes
+      default: 0,
+      min: 0
+    }
+  }],
   profilePicture: {
     type: String,
     default: ''
