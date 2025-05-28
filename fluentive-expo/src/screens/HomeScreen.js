@@ -19,27 +19,71 @@ const HomeScreen = () => {
 
   const loadUserData = async () => {
     try {
-      const data = await AsyncStorage.getItem('userData');
-      if (data) {
-        const parsedData = JSON.parse(data);
-        console.log('Loaded user data:', parsedData);
-        setUserData(parsedData);
+      // First try to get the token
+      const token = await AsyncStorage.getItem('userToken');
+      if (!token) {
+        console.warn('No auth token found');
+        return;
+      }
+
+      // Fetch fresh user data from the server
+      try {
+        const response = await axios.get('http://localhost:5001/api/users/me', {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+        
+        const freshUserData = response.data;
+        console.log('Fresh user data from server:', JSON.stringify(freshUserData, null, 2));
+        
+        // Store the fresh data in AsyncStorage
+        const storageData = {
+          id: freshUserData._id || freshUserData.id,
+          username: freshUserData.username,
+          email: freshUserData.email,
+          languages: freshUserData.languages || []
+        };
+        
+        await AsyncStorage.setItem('userData', JSON.stringify(storageData));
+        setUserData(storageData);
+      } catch (error) {
+        console.error('Error fetching fresh user data:', error);
+        // Fall back to AsyncStorage data if server request fails
+        const data = await AsyncStorage.getItem('userData');
+        if (data) {
+          const parsedData = JSON.parse(data);
+          console.log('Using cached user data:', JSON.stringify(parsedData, null, 2));
+          setUserData(parsedData);
+        }
       }
     } catch (error) {
-      console.log('Error loading user data:', error);
+      console.error('Error in loadUserData:', error);
     }
   };
 
   const handleAddLanguage = async (language) => {
-    if (!userData) return;
+    if (!userData) {
+      console.error('userData is null or undefined');
+      setError('User data not loaded. Please try again.');
+      return;
+    }
+
+    if (!userData.id) {
+      console.error('userData.id is missing:', userData);
+      setError('User ID not found. Please log out and log in again.');
+      return;
+    }
 
     // Check if language already exists
     if (userData.languages?.some(lang => lang.name === language)) {
+      setError('You have already added this language');
       setShowLanguageModal(false);
       return;
     }
 
     setLoading(true);
+    setError(null); // Clear any previous errors
     try {
       // Get the auth token from AsyncStorage
       const token = await AsyncStorage.getItem('userToken');
@@ -47,18 +91,20 @@ const HomeScreen = () => {
         throw new Error('No authentication token found');
       }
 
-      console.log('Sending request with userData:', userData);
-      console.log('Using userId:', userData._id);
+      console.log('Full userData object:', JSON.stringify(userData, null, 2));
+      console.log('Sending request with userId:', userData.id);
+
+      const requestBody = {
+        userId: userData.id,
+        language: {
+          name: language,
+          proficiency: 'Beginner',
+          speakingTime: 0
+        }
+      };
 
       const response = await axios.post('http://localhost:5001/api/users/add-language', 
-        {
-          userId: userData._id,
-          language: {
-            name: language,
-            proficiency: 'Beginner',
-            speakingTime: 0
-          }
-        },
+        requestBody,
         {
           headers: {
             'Authorization': `Bearer ${token}`
@@ -68,15 +114,23 @@ const HomeScreen = () => {
 
       // Update local storage with new user data
       const updatedUserData = response.data;
-      console.log('Received updated user data:', updatedUserData);
-      await AsyncStorage.setItem('userData', JSON.stringify(updatedUserData));
-      setUserData(updatedUserData);
+      console.log('Received updated user data:', JSON.stringify(updatedUserData, null, 2));
+      
+      // Ensure we preserve the id field when updating AsyncStorage
+      const storageData = {
+        id: updatedUserData._id || updatedUserData.id,
+        username: updatedUserData.username,
+        email: updatedUserData.email,
+        languages: updatedUserData.languages || []
+      };
+      
+      await AsyncStorage.setItem('userData', JSON.stringify(storageData));
+      setUserData(storageData);
       setShowLanguageModal(false);
     } catch (error) {
       console.error('Error adding language:', error);
-      // Show error to user
-      if (error.message === 'No authentication token found') {
-        setError('Please log in again');
+      if (error.response?.status === 400) {
+        setError('This language has already been added');
       } else {
         setError(error.response?.data?.message || 'Error adding language');
       }
