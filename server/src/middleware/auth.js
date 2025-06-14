@@ -5,7 +5,10 @@ module.exports = (req, res, next) => {
     const token = req.header('Authorization')?.replace('Bearer ', '');
     
     if (!token) {
-      return res.status(401).json({ message: 'No authentication token, access denied' });
+      return res.status(401).json({ 
+        message: 'No authentication token, access denied',
+        code: 'NO_TOKEN'
+      });
     }
 
     const verified = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key');
@@ -14,6 +17,17 @@ module.exports = (req, res, next) => {
     next();
   } catch (error) {
     console.error('Auth middleware error:', error);
-    res.status(401).json({ message: 'Token verification failed, authorization denied' });
+    
+    if (error.name === 'TokenExpiredError') {
+      return res.status(401).json({ 
+        message: 'Session expired, please login again',
+        code: 'TOKEN_EXPIRED'
+      });
+    }
+    
+    res.status(401).json({ 
+      message: 'Invalid token, please login again',
+      code: 'INVALID_TOKEN'
+    });
   }
 }; 

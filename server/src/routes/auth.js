@@ -50,7 +50,7 @@ router.post('/signup', validateSignup, async (req, res) => {
     const token = jwt.sign(
       { userId: user._id },
       process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '24h' }
+      { expiresIn: '365d' }
     );
     console.log('tried 6')
     res.status(201).json({
@@ -94,7 +94,7 @@ router.post('/login', validateLogin, async (req, res) => {
     const token = jwt.sign(
       { userId: user._id },
       process.env.JWT_SECRET || 'your-secret-key',
-      { expiresIn: '24h' }
+      { expiresIn: '365d' }
     );
 
     res.json({
