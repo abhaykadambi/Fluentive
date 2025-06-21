@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useNavigation } from '@react-navigation/native';
 import axios from 'axios';
 import React, { useEffect, useState } from 'react';
 import { FlatList, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -12,10 +13,21 @@ const HomeScreen = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [selectedLanguage, setSelectedLanguage] = useState(null);
+  const [lessons, setLessons] = useState([]);
+  const [lessonsLoading, setLessonsLoading] = useState(false);
+  const navigation = useNavigation();
 
   useEffect(() => {
     loadUserData();
   }, []);
+
+  useEffect(() => {
+    if (selectedLanguage) {
+      fetchLessons();
+    } else {
+      setLessons([]);
+    }
+  }, [selectedLanguage]);
 
   const loadUserData = async () => {
     try {
@@ -35,7 +47,7 @@ const HomeScreen = () => {
         });
         
         const freshUserData = response.data;
-        console.log('Fresh user data from server:', JSON.stringify(freshUserData, null, 2));
+        //console.log('Fresh user data from server:', JSON.stringify(freshUserData, null, 2));
         
         // Store the fresh data in AsyncStorage
         const storageData = {
@@ -59,6 +71,37 @@ const HomeScreen = () => {
       }
     } catch (error) {
       console.error('Error in loadUserData:', error);
+    }
+  };
+
+  const fetchLessons = async () => {
+    if (!selectedLanguage) return;
+    
+    setLessonsLoading(true);
+    try {
+      const response = await axios.get('http://localhost:5001/api/speaking-lessons');
+      
+      if (response.data.success) {
+        // Filter lessons based on user's proficiency level
+        const userProficiency = selectedLanguage.proficiency;
+        let filteredLessons = response.data.data;
+        
+        // Filter by difficulty level (allow same level and easier levels)
+        const difficultyOrder = ['Beginner', 'Intermediate', 'Advanced'];
+        const userLevelIndex = difficultyOrder.indexOf(userProficiency);
+        
+        filteredLessons = filteredLessons.filter(lesson => {
+          const lessonLevelIndex = difficultyOrder.indexOf(lesson.difficulty);
+          return lessonLevelIndex <= userLevelIndex;
+        });
+        
+        setLessons(filteredLessons);
+      }
+    } catch (error) {
+      console.error('Error fetching lessons:', error);
+      setError('Failed to load lessons');
+    } finally {
+      setLessonsLoading(false);
     }
   };
 
@@ -143,6 +186,14 @@ const HomeScreen = () => {
     setSelectedLanguage(language);
   };
 
+  const handleStartLesson = (lesson) => {
+    // Navigate to speak screen with lesson data and selected language
+    navigation.navigate('Speak', {
+      lesson: lesson,
+      selectedLanguage: selectedLanguage
+    });
+  };
+
   const renderLanguageCard = (language) => {
     const isSelected = selectedLanguage?.name === language.name;
     return (
@@ -189,12 +240,25 @@ const HomeScreen = () => {
       );
     }
 
-    // Placeholder lessons - replace with actual lessons data later
-    const lessons = [
-      { id: 1, title: 'Basic Greetings', duration: '15 min', level: 'Beginner' },
-      { id: 2, title: 'Numbers 1-10', duration: '20 min', level: 'Beginner' },
-      { id: 3, title: 'Common Phrases', duration: '25 min', level: 'Beginner' },
-    ];
+    if (lessonsLoading) {
+      return (
+        <View style={styles.noLanguageSelected}>
+          <Text style={styles.noLanguageText}>
+            Loading lessons...
+          </Text>
+        </View>
+      );
+    }
+
+    if (lessons.length === 0) {
+      return (
+        <View style={styles.noLanguageSelected}>
+          <Text style={styles.noLanguageText}>
+            No lessons available for your current level
+          </Text>
+        </View>
+      );
+    }
 
     return (
       <View style={styles.lessonsContainer}>
@@ -202,16 +266,18 @@ const HomeScreen = () => {
           {selectedLanguage.name} Lessons
         </Text>
         {lessons.map(lesson => (
-          <Card key={lesson.id} style={styles.lessonCard}>
+          <Card key={lesson._id} style={styles.lessonCard}>
             <Card.Content>
               <Text style={styles.lessonTitle}>{lesson.title}</Text>
+              <Text style={styles.lessonDescription}>{lesson.description}</Text>
               <View style={styles.lessonDetails}>
-                <Text style={styles.lessonDuration}>{lesson.duration}</Text>
-                <Text style={styles.lessonLevel}>{lesson.level}</Text>
+                <Text style={styles.lessonDuration}>{lesson.estimatedDuration} min</Text>
+                <Text style={styles.lessonLevel}>{lesson.difficulty}</Text>
+                <Text style={styles.lessonCategory}>{lesson.category}</Text>
               </View>
             </Card.Content>
             <Card.Actions>
-              <Button mode="contained" onPress={() => console.log('Start lesson:', lesson.id)}>
+              <Button mode="contained" onPress={() => handleStartLesson(lesson)}>
                 Start Lesson
               </Button>
             </Card.Actions>
@@ -394,15 +460,27 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 8,
   },
+  lessonDescription: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 8,
+  },
   lessonDetails: {
     flexDirection: 'row',
     justifyContent: 'space-between',
+    flexWrap: 'wrap',
   },
   lessonDuration: {
     color: '#666',
+    fontSize: 12,
   },
   lessonLevel: {
     color: '#666',
+    fontSize: 12,
+  },
+  lessonCategory: {
+    color: '#666',
+    fontSize: 12,
   },
   modalOverlay: {
     flex: 1,

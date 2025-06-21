@@ -1,8 +1,8 @@
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import { Audio } from 'expo-av';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Modal, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Button, Menu, Portal, Surface, Text } from 'react-native-paper';
+import { Alert, Animated, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Button, Menu, Portal, Surface, Text, TextInput } from 'react-native-paper';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 
@@ -79,6 +79,11 @@ const AudioWave = ({ isListening, isSpeaking }) => {
 
 const SpeakScreen = () => {
   const navigation = useNavigation();
+  const route = useRoute();
+  
+  // Get lesson and language data from route params
+  const { lesson, selectedLanguage } = route.params || {};
+  
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [selectedLevel, setSelectedLevel] = useState('Beginner');
@@ -88,6 +93,10 @@ const SpeakScreen = () => {
   const [transcription, setTranscription] = useState('');
   const [showResults, setShowResults] = useState(false);
   const [speakingTime, setSpeakingTime] = useState(0);
+  const [userInput, setUserInput] = useState('');
+
+  // Add ref for auto-scrolling
+  const scrollViewRef = useRef(null);
 
   // Placeholder metrics - replace with real data later
   const [metrics, setMetrics] = useState({
@@ -95,6 +104,41 @@ const SpeakScreen = () => {
     grammar: 90,
     complexity: 75,
   });
+
+  // Generate the lesson prompt with target language
+  const generateLessonPrompt = () => {
+    if (!lesson || !selectedLanguage) {
+      return `You are a helpful language learning assistant. Help the user practice ${selectedLevel.toLowerCase()} level conversation. Keep responses natural and engaging.`;
+    }
+
+    // Get a random vocabulary item from the lesson
+    const vocabulary = lesson.vocabulary || [];
+    const randomVocab = vocabulary.length > 0 
+      ? vocabulary[Math.floor(Math.random() * vocabulary.length)]
+      : 'item';
+
+    // Generate the complete prompt
+    const targetLanguage = selectedLanguage.name.toLowerCase();
+    let prompt = lesson.rolePlayPrompt
+      .replace('_______', randomVocab)
+      .replace('the target language', targetLanguage);
+
+    return prompt;
+  };
+
+  const scrollToBottom = () => {
+    if (scrollViewRef.current) {
+      scrollViewRef.current.scrollToEnd({ animated: true });
+    }
+  };
+
+  // Auto-scroll when transcription changes
+  useEffect(() => {
+    if (transcription) {
+      // Small delay to ensure the text has been rendered
+      setTimeout(scrollToBottom, 100);
+    }
+  }, [transcription]);
 
   const toggleListening = () => {
     if (isListening) {
@@ -107,7 +151,16 @@ const SpeakScreen = () => {
     } else {
       // Start listening
       setIsListening(true);
-      setTranscription('App: Hello! How are you today?\n\nYou: ');
+      
+      // Generate initial message based on lesson
+      let initialMessage;
+      if (lesson && selectedLanguage) {
+        initialMessage = `Starting ${lesson.title} lesson in ${selectedLanguage.name}...\n\nApp: Hello! Let's begin our conversation.`;
+      } else {
+        initialMessage = 'App: Hello! How are you today?\n\nYou: ';
+      }
+      
+      setTranscription(initialMessage);
       
       // Simulate app speaking (remove this in real implementation)
       setIsSpeaking(true);
@@ -131,6 +184,58 @@ const SpeakScreen = () => {
     setIsSpeaking(false);
     // Navigate to home screen
     navigation.navigate('Home');
+  };
+
+  const handleTextSubmit = async () => {
+    if (!userInput.trim()) return;
+
+    // Add user's message to transcription
+    const newTranscription = transcription 
+      ? `${transcription}\n\nYou: ${userInput}`
+      : `You: ${userInput}`;
+    setTranscription(newTranscription);
+
+    // Clear input immediately for better UX
+    const currentInput = userInput;
+    setUserInput('');
+
+    try {
+      // Generate the lesson-specific prompt
+      const lessonPrompt = generateLessonPrompt();
+      
+      // Prepare the request payload
+      const payload = {
+        prompt: lessonPrompt,
+        history: [], // TODO: Parse conversation history from transcription
+        userMessage: currentInput
+      };
+
+      console.log('Sending payload to /convo route:', JSON.stringify(payload, null, 2));
+
+      // Make API call to backend
+      const response = await fetch('http://localhost:5001/convo', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      console.log('Response from /convo route:', JSON.stringify(data, null, 2));
+      
+      // Add the assistant's response to transcription
+      setTranscription(prev => `${prev}\n\nApp: ${data.content}`);
+
+    } catch (error) {
+      console.error('Error making API call:', error);
+      // Add error message to transcription
+      setTranscription(prev => `${prev}\n\nApp: Sorry, I encountered an error. Please try again.`);
+    }
   };
 
   const renderDropdown = (label, value, options, visible, onDismiss, onSelect) => (
@@ -294,6 +399,15 @@ const SpeakScreen = () => {
 
   return (
     <View style={styles.container}>
+      {/* Lesson Header */}
+      {lesson && selectedLanguage && (
+        <View style={styles.lessonHeader}>
+          <Text style={styles.lessonTitle}>{lesson.title}</Text>
+          <Text style={styles.lessonLanguage}>in {selectedLanguage.name}</Text>
+          <Text style={styles.lessonDescription}>{lesson.description}</Text>
+        </View>
+      )}
+
       {/* Dropdowns */}
       <View style={styles.dropdownsContainer}>
         {renderDropdown(
@@ -329,11 +443,39 @@ const SpeakScreen = () => {
         )}
       </View>
 
+      {/* Text Input Area */}
+      <View style={styles.inputContainer}>
+        <TextInput
+          style={styles.textInput}
+          value={userInput}
+          onChangeText={setUserInput}
+          placeholder="Or type your message here..."
+          multiline
+          maxLength={500}
+        />
+        <Button
+          mode="contained"
+          onPress={handleTextSubmit}
+          style={styles.submitButton}
+          disabled={!userInput.trim()}
+        >
+          Send
+        </Button>
+      </View>
+
       {/* Transcription Area */}
       <Surface style={styles.transcriptionContainer}>
-        <Text style={styles.transcriptionText}>
-          {transcription || 'Start speaking to see transcription here...'}
-        </Text>
+        <ScrollView 
+          ref={scrollViewRef}
+          style={styles.transcriptionScrollView}
+          showsVerticalScrollIndicator={true}
+          nestedScrollEnabled={true}
+          onContentSizeChange={scrollToBottom}
+        >
+          <Text style={styles.transcriptionText}>
+            {transcription || 'Start speaking or typing to see the conversation here...'}
+          </Text>
+        </ScrollView>
       </Surface>
 
       {/* Stop Button (only shown when listening) */}
@@ -431,7 +573,10 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     elevation: 2,
     minHeight: 150,
-    maxHeight: 200,
+    maxHeight: 300,
+  },
+  transcriptionScrollView: {
+    flex: 1,
   },
   transcriptionText: {
     fontSize: 16,
@@ -514,6 +659,49 @@ const styles = StyleSheet.create({
   doneButtonLabel: {
     fontSize: 18,
     paddingVertical: 4,
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 20,
+    gap: 10,
+    paddingHorizontal: 20,
+  },
+  textInput: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    maxHeight: 100,
+  },
+  submitButton: {
+    backgroundColor: '#007AFF',
+  },
+  lessonHeader: {
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    borderRadius: 12,
+    marginBottom: 20,
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF',
+  },
+  lessonTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#000',
+    marginBottom: 4,
+  },
+  lessonLanguage: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '600',
+    marginBottom: 8,
+  },
+  lessonDescription: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
   },
 });
 
