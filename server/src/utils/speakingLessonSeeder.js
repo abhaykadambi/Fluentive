@@ -6,32 +6,36 @@ const speakingLessons = require('../data/speakingLessons');
  */
 const seedSpeakingLessons = async () => {
   try {
-    console.log('Starting speaking lesson upsert...');
-    let upsertedCount = 0;
-    for (const lessonData of speakingLessons) {
-      // Find existing lesson by title
-      const existing = await SpeakingLesson.findOne({ title: lessonData.title });
-      if (existing) {
-        // Preserve statistics fields
-        lessonData.completionCount = existing.completionCount;
-        lessonData.averageRating = existing.averageRating;
-        lessonData.ratingCount = existing.ratingCount;
-        // Update the lesson
-        await SpeakingLesson.updateOne(
-          { _id: existing._id },
-          { $set: lessonData }
+    console.log('Starting speaking lesson seeding...');
+    
+    // Upsert each lesson (update if exists, insert if not)
+    const upsertPromises = speakingLessons.map(async (lessonData) => {
+      try {
+        const result = await SpeakingLesson.findOneAndUpdate(
+          { title: lessonData.title }, // Find by title
+          lessonData, // Update with new data
+          { 
+            upsert: true, // Create if doesn't exist
+            new: true, // Return the updated document
+            setDefaultsOnInsert: true // Set default values for new documents
+          }
         );
-        console.log(`Updated lesson: ${lessonData.title}`);
-      } else {
-        // Insert new lesson
-        await SpeakingLesson.create(lessonData);
-        console.log(`Inserted new lesson: ${lessonData.title}`);
+        return result;
+      } catch (error) {
+        console.error(`Error upserting lesson "${lessonData.title}":`, error);
+        throw error;
       }
-      upsertedCount++;
-    }
-    console.log(`Upserted ${upsertedCount} speaking lessons.`);
+    });
+    
+    const upsertedLessons = await Promise.all(upsertPromises);
+    
+    console.log(`Successfully upserted ${upsertedLessons.length} speaking lessons:`);
+    upsertedLessons.forEach(lesson => {
+      console.log(`- ${lesson.title} (${lesson.difficulty})`);
+    });
+    
   } catch (error) {
-    console.error('Error upserting speaking lessons:', error);
+    console.error('Error seeding speaking lessons:', error);
     throw error;
   }
 };

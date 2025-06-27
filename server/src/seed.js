@@ -7,7 +7,7 @@ const seedDatabase = async () => {
     // 1. Connect to MongoDB
     console.log('Connecting to MongoDB...');
     console.log('MONGODB_URI:', process.env.MONGODB_URI);
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/fluentive', {
+    await mongoose.connect(process.env.MONGODB_URI, {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
