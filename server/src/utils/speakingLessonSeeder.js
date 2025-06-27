@@ -6,25 +6,32 @@ const speakingLessons = require('../data/speakingLessons');
  */
 const seedSpeakingLessons = async () => {
   try {
-    console.log('Starting speaking lesson seeding...');
-    
-    // Check if lessons already exist
-    const existingLessons = await SpeakingLesson.countDocuments();
-    if (existingLessons > 0) {
-      console.log(`${existingLessons} speaking lessons already exist. Skipping seeding.`);
-      return;
+    console.log('Starting speaking lesson upsert...');
+    let upsertedCount = 0;
+    for (const lessonData of speakingLessons) {
+      // Find existing lesson by title
+      const existing = await SpeakingLesson.findOne({ title: lessonData.title });
+      if (existing) {
+        // Preserve statistics fields
+        lessonData.completionCount = existing.completionCount;
+        lessonData.averageRating = existing.averageRating;
+        lessonData.ratingCount = existing.ratingCount;
+        // Update the lesson
+        await SpeakingLesson.updateOne(
+          { _id: existing._id },
+          { $set: lessonData }
+        );
+        console.log(`Updated lesson: ${lessonData.title}`);
+      } else {
+        // Insert new lesson
+        await SpeakingLesson.create(lessonData);
+        console.log(`Inserted new lesson: ${lessonData.title}`);
+      }
+      upsertedCount++;
     }
-    
-    // Insert sample lessons
-    const insertedLessons = await SpeakingLesson.insertMany(speakingLessons);
-    
-    console.log(`Successfully seeded ${insertedLessons.length} speaking lessons:`);
-    insertedLessons.forEach(lesson => {
-      console.log(`- ${lesson.title} (${lesson.difficulty})`);
-    });
-    
+    console.log(`Upserted ${upsertedCount} speaking lessons.`);
   } catch (error) {
-    console.error('Error seeding speaking lessons:', error);
+    console.error('Error upserting speaking lessons:', error);
     throw error;
   }
 };

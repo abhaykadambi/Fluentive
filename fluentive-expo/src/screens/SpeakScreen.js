@@ -1,4 +1,4 @@
-import { useNavigation, useRoute } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { Audio } from 'expo-av';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Animated, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -94,6 +94,7 @@ const SpeakScreen = () => {
   const [showResults, setShowResults] = useState(false);
   const [speakingTime, setSpeakingTime] = useState(0);
   const [userInput, setUserInput] = useState('');
+  const [conversationStarted, setConversationStarted] = useState(false);
 
   // Add ref for auto-scrolling
   const scrollViewRef = useRef(null);
@@ -104,6 +105,31 @@ const SpeakScreen = () => {
     grammar: 90,
     complexity: 75,
   });
+
+  const resetSpeakScreenState = React.useCallback(() => {
+    setIsListening(false);
+    setIsSpeaking(false);
+    setSelectedLevel('Beginner');
+    setSelectedSpeed('Normal');
+    setShowLevelMenu(false);
+    setShowSpeedMenu(false);
+    setTranscription('');
+    setShowResults(false);
+    setSpeakingTime(0);
+    setUserInput('');
+    setConversationStarted(false);
+    setMetrics({
+      pronunciation: 85,
+      grammar: 90,
+      complexity: 75,
+    });
+  }, []);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      resetSpeakScreenState();
+    }, [lesson, selectedLanguage, resetSpeakScreenState])
+  );
 
   // Generate the lesson prompt with target language
   const generateLessonPrompt = () => {
@@ -140,33 +166,61 @@ const SpeakScreen = () => {
     }
   }, [transcription]);
 
-  const toggleListening = () => {
+  const toggleListening = async () => {
     if (isListening) {
       // Stop listening and show results
       setIsListening(false);
       setIsSpeaking(false);
       setShowResults(true);
+      setConversationStarted(false);
       // In a real app, calculate these metrics based on the conversation
       setSpeakingTime(120); // 2 minutes in seconds
     } else {
       // Start listening
       setIsListening(true);
-      
-      // Generate initial message based on lesson
-      let initialMessage;
-      if (lesson && selectedLanguage) {
-        initialMessage = `Starting ${lesson.title} lesson in ${selectedLanguage.name}...\n\nApp: Hello! Let's begin our conversation.`;
-      } else {
-        initialMessage = 'App: Hello! How are you today?\n\nYou: ';
-      }
-      
-      setTranscription(initialMessage);
-      
-      // Simulate app speaking (remove this in real implementation)
       setIsSpeaking(true);
-      setTimeout(() => {
+      setConversationStarted(false);
+      setTranscription('');
+      try {
+        // Generate the lesson-specific prompt
+        const lessonPrompt = generateLessonPrompt();
+        const payload = {
+          prompt: lessonPrompt,
+          history: [],
+          userMessage: '',
+        };
+        const response = await fetch('http://localhost:5001/convo', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const data = await response.json();
+        let content = data.content || '';
+        if (content.trim().endsWith('END 2515')) {
+          content = content.replace(/END 2515$/, '').trim();
+          setTranscription(`App: ${content}`);
+          // End conversation as if stop was pressed
+          setTimeout(() => {
+            setIsListening(false);
+            setIsSpeaking(false);
+            setShowResults(true);
+            setConversationStarted(false);
+            setSpeakingTime(120); // or calculate as needed
+          }, 500); // short delay to show last message
+        } else {
+          setTranscription(`App: ${content}`);
+          setConversationStarted(true);
+        }
+      } catch (error) {
+        setTranscription('App: Sorry, I encountered an error. Please try again.');
+      } finally {
         setIsSpeaking(false);
-      }, 2000);
+      }
     }
   };
 
@@ -202,7 +256,6 @@ const SpeakScreen = () => {
     try {
       // Generate the lesson-specific prompt
       const lessonPrompt = generateLessonPrompt();
-      
       // Prepare the request payload
       const payload = {
         prompt: lessonPrompt,
@@ -226,10 +279,21 @@ const SpeakScreen = () => {
       }
 
       const data = await response.json();
-      console.log('Response from /convo route:', JSON.stringify(data, null, 2));
-      
-      // Add the assistant's response to transcription
-      setTranscription(prev => `${prev}\n\nApp: ${data.content}`);
+      let content = data.content || '';
+      if (content.trim().endsWith('END 2515')) {
+        content = content.replace(/END 2515$/, '').trim();
+        setTranscription(prev => `${prev}\n\nApp: ${content}`);
+        // End conversation as if stop was pressed
+        setTimeout(() => {
+          setIsListening(false);
+          setIsSpeaking(false);
+          setShowResults(true);
+          setConversationStarted(false);
+          setSpeakingTime(120); // or calculate as needed
+        }, 500); // short delay to show last message
+      } else {
+        setTranscription(prev => `${prev}\n\nApp: ${content}`);
+      }
 
     } catch (error) {
       console.error('Error making API call:', error);
@@ -402,8 +466,22 @@ const SpeakScreen = () => {
       {/* Lesson Header */}
       {lesson && selectedLanguage && (
         <View style={styles.lessonHeader}>
-          <Text style={styles.lessonTitle}>{lesson.title}</Text>
-          <Text style={styles.lessonLanguage}>in {selectedLanguage.name}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.lessonTitle}>{lesson.title}</Text>
+              <Text style={styles.lessonLanguage}>in {selectedLanguage.name}</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => {
+                resetSpeakScreenState();
+                navigation.setParams({ lesson: undefined, selectedLanguage: undefined });
+              }}
+              style={{ marginLeft: 12, padding: 4 }}
+              accessibilityLabel="Cancel lesson"
+            >
+              <Icon name="close" size={24} color="#007AFF" />
+            </TouchableOpacity>
+          </View>
           <Text style={styles.lessonDescription}>{lesson.description}</Text>
         </View>
       )}
@@ -444,24 +522,26 @@ const SpeakScreen = () => {
       </View>
 
       {/* Text Input Area */}
-      <View style={styles.inputContainer}>
-        <TextInput
-          style={styles.textInput}
-          value={userInput}
-          onChangeText={setUserInput}
-          placeholder="Or type your message here..."
-          multiline
-          maxLength={500}
-        />
-        <Button
-          mode="contained"
-          onPress={handleTextSubmit}
-          style={styles.submitButton}
-          disabled={!userInput.trim()}
-        >
-          Send
-        </Button>
-      </View>
+      {conversationStarted && (
+        <View style={styles.inputContainer}>
+          <TextInput
+            style={styles.textInput}
+            value={userInput}
+            onChangeText={setUserInput}
+            placeholder="Or type your message here..."
+            multiline
+            maxLength={500}
+          />
+          <Button
+            mode="contained"
+            onPress={handleTextSubmit}
+            style={styles.submitButton}
+            disabled={!userInput.trim()}
+          >
+            Send
+          </Button>
+        </View>
+      )}
 
       {/* Transcription Area */}
       <Surface style={styles.transcriptionContainer}>

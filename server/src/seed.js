@@ -2,13 +2,12 @@ require('dotenv').config();
 const mongoose = require('mongoose');
 const { seedSpeakingLessons } = require('./utils/speakingLessonSeeder');
 
-const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/fluentive';
-
 const seedDatabase = async () => {
   try {
     // 1. Connect to MongoDB
     console.log('Connecting to MongoDB...');
-    await mongoose.connect(MONGODB_URI, {
+    console.log('MONGODB_URI:', process.env.MONGODB_URI);
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/fluentive', {
       useNewUrlParser: true,
       useUnifiedTopology: true,
     });
