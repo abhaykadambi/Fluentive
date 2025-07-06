@@ -61,4 +61,45 @@ router.post('/add-language', auth, async (req, res) => {
   }
 });
 
+// Update user's speaking time for a specific language
+router.put('/update-speaking-time', auth, async (req, res) => {
+  try {
+    const { languageName, speakingTimeSeconds } = req.body;
+    
+    if (!languageName || typeof speakingTimeSeconds !== 'number' || speakingTimeSeconds < 0) {
+      return res.status(400).json({ message: 'Invalid request data' });
+    }
+
+    const user = await User.findById(req.user.userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // Find the language in user's languages array
+    const languageIndex = user.languages.findIndex(lang => lang.name === languageName);
+    
+    if (languageIndex === -1) {
+      // If language doesn't exist, add it with the speaking time
+      user.languages.push({
+        name: languageName,
+        proficiency: 'Beginner',
+        speakingTime: Math.floor(speakingTimeSeconds / 60) // Convert seconds to minutes
+      });
+    } else {
+      // Update existing language's speaking time
+      user.languages[languageIndex].speakingTime += Math.floor(speakingTimeSeconds / 60);
+    }
+
+    await user.save();
+    res.json({ 
+      success: true, 
+      message: 'Speaking time updated successfully',
+      user: user
+    });
+  } catch (error) {
+    console.error('Error updating speaking time:', error);
+    res.status(500).json({ message: 'Error updating speaking time' });
+  }
+});
+
 module.exports = router; 

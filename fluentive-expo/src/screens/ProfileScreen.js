@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useFocusEffect } from '@react-navigation/native';
 import axios from 'axios';
 import React, { useEffect, useState } from 'react';
 import { Image, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
@@ -34,12 +35,14 @@ const ProfileScreen = () => {
         if (data) {
           const parsedData = JSON.parse(data);
           setUserData(parsedData);
-          setName(parsedData.name);
-          setEmail(parsedData.email);
+          setName(parsedData.username || parsedData.name || '');
+          setEmail(parsedData.email || '');
           setProfileImage(parsedData.profileImage);
           
           // Calculate total speaking time from languages
           const totalTime = parsedData.languages?.reduce((acc, lang) => acc + (lang.speakingTime || 0), 0) || 0;
+          console.log('ProfileScreen - User languages:', parsedData.languages);
+          console.log('ProfileScreen - Total speaking time (minutes):', totalTime);
           
           // Find most advanced language
           const mostAdvanced = parsedData.languages?.reduce((max, lang) => 
@@ -50,7 +53,7 @@ const ProfileScreen = () => {
 
           setStats(prev => ({
             ...prev,
-            totalSpeakingTime: Math.floor(totalTime / 60), // Convert seconds to minutes
+            totalSpeakingTime: totalTime, // speakingTime is already in minutes
             mostAdvancedLanguage: mostAdvanced?.name || 'None',
             languages: parsedData.languages || []
           }));
@@ -62,6 +65,47 @@ const ProfileScreen = () => {
 
     loadUserData();
   }, []);
+
+  // Add focus effect to refresh data when screen comes into focus
+  useFocusEffect(
+    React.useCallback(() => {
+      const loadUserData = async () => {
+        try {
+          const data = await AsyncStorage.getItem('userData');
+          if (data) {
+            const parsedData = JSON.parse(data);
+            setUserData(parsedData);
+            setName(parsedData.username || parsedData.name || '');
+            setEmail(parsedData.email || '');
+            setProfileImage(parsedData.profileImage);
+            
+            // Calculate total speaking time from languages
+            const totalTime = parsedData.languages?.reduce((acc, lang) => acc + (lang.speakingTime || 0), 0) || 0;
+            console.log('ProfileScreen (focus) - User languages:', parsedData.languages);
+            console.log('ProfileScreen (focus) - Total speaking time (minutes):', totalTime);
+            
+            // Find most advanced language
+            const mostAdvanced = parsedData.languages?.reduce((max, lang) => 
+              (lang.proficiency === 'Native' || 
+               (lang.proficiency === 'Advanced' && max.proficiency !== 'Native') ||
+               (lang.proficiency === 'Intermediate' && max.proficiency === 'Beginner'))
+                ? lang : max, { proficiency: 'Beginner', name: 'None' });
+
+            setStats(prev => ({
+              ...prev,
+              totalSpeakingTime: totalTime, // speakingTime is already in minutes
+              mostAdvancedLanguage: mostAdvanced?.name || 'None',
+              languages: parsedData.languages || []
+            }));
+          }
+        } catch (error) {
+          console.log('Error loading user data:', error);
+        }
+      };
+
+      loadUserData();
+    }, [])
+  );
 
   const handleUpdateProfile = async () => {
     if (!name || !email) {
@@ -76,7 +120,7 @@ const ProfileScreen = () => {
     try {
       const token = await AsyncStorage.getItem('userToken');
       const response = await axios.put(
-        'http://localhost:5000/api/users/profile',
+        'http://localhost:5001/api/users/profile',
         {
           name,
           email,

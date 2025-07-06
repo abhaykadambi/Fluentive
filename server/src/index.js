@@ -73,6 +73,39 @@ app.post('/convo', async (req, res) => {
   }
 });
 
+// Translation endpoint
+app.post('/translate', async (req, res) => {
+  const { word, targetLanguage } = req.body;
+  
+  if (!word || !targetLanguage) {
+    return res.status(400).json({ error: 'word and targetLanguage are required' });
+  }
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o-mini',
+      messages: [
+        {
+          role: 'system',
+          content: `You are a language translator. Translate the given word to English. Only return the English translation, nothing else.`
+        },
+        {
+          role: 'user',
+          content: `Translate "${word}" from ${targetLanguage} to English.`
+        }
+      ],
+      temperature: 0.1,
+      max_tokens: 50
+    });
+
+    const translation = completion.choices[0].message.content.trim();
+    res.json({ translation });
+  } catch (err) {
+    console.error('Translation error:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
