@@ -475,7 +475,9 @@ This helps the user understand what you're saying.`;
         let content = data.content || '';
         if (content.trim().endsWith('END 2515')) {
           content = content.replace(/END 2515$/, '').trim();
-          setTranscription(`App: ${content}`);
+          let cleanContent = content.replace(/([^\n])\n([^\n])/g, '$1 $2'); // Replace single newlines between words with spaces
+          cleanContent = cleanContent.replace(/\n{2,}/g, '\n\n'); // Keep double newlines for turn separation
+          setTranscription(`App: ${cleanContent}`);
           // End conversation as if stop was pressed
           setTimeout(async () => {
             setIsListening(false);
@@ -490,7 +492,9 @@ This helps the user understand what you're saying.`;
             setShowResults(true);
           }, 500); // short delay to show last message
         } else {
-          setTranscription(`App: ${content}`);
+          let cleanContent = content.replace(/([^\n])\n([^\n])/g, '$1 $2'); // Replace single newlines between words with spaces
+          cleanContent = cleanContent.replace(/\n{2,}/g, '\n\n'); // Keep double newlines for turn separation
+          setTranscription(`App: ${cleanContent}`);
           setConversationStarted(true);
         }
       } catch (error) {
@@ -540,9 +544,11 @@ This helps the user understand what you're saying.`;
     }
 
     // Add user's message to transcription
+    let cleanUserInput = userInput.replace(/([^\n])\n([^\n])/g, '$1 $2'); // Replace single newlines between words with spaces
+    cleanUserInput = cleanUserInput.replace(/\n{2,}/g, '\n\n'); // Keep double newlines for turn separation
     const newTranscription = transcription 
-      ? `${transcription}\n\nYou: ${userInput}`
-      : `You: ${userInput}`;
+      ? `${transcription}\n\nYou: ${cleanUserInput}`
+      : `You: ${cleanUserInput}`;
     setTranscription(newTranscription);
 
     // Start conversation timer if not already started
@@ -583,7 +589,9 @@ This helps the user understand what you're saying.`;
       let content = data.content || '';
       if (content.trim().endsWith('END 2515')) {
         content = content.replace(/END 2515$/, '').trim();
-        setTranscription(prev => `${prev}\n\nApp: ${content}`);
+        let cleanContent = content.replace(/([^\n])\n([^\n])/g, '$1 $2'); // Replace single newlines between words with spaces
+        cleanContent = cleanContent.replace(/\n{2,}/g, '\n\n'); // Keep double newlines for turn separation
+        setTranscription(prev => `${prev}\n\nApp: ${cleanContent}`);
         // End conversation as if stop was pressed
         setTimeout(async () => {
           setIsListening(false);
@@ -598,7 +606,9 @@ This helps the user understand what you're saying.`;
           setShowResults(true);
         }, 500); // short delay to show last message
       } else {
-        setTranscription(prev => `${prev}\n\nApp: ${content}`);
+        let cleanContent = content.replace(/([^\n])\n([^\n])/g, '$1 $2'); // Replace single newlines between words with spaces
+        cleanContent = cleanContent.replace(/\n{2,}/g, '\n\n'); // Keep double newlines for turn separation
+        setTranscription(prev => `${prev}\n\nApp: ${cleanContent}`);
       }
 
     } catch (error) {
