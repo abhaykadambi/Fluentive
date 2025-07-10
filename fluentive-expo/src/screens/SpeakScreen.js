@@ -1,11 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
-import { Audio } from 'expo-av';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Animated, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
 import { Button, Menu, Portal, Surface, Text, TextInput } from 'react-native-paper';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
-
 
 const SPEAKING_LEVELS = ['Beginner', 'Intermediate', 'Advanced', 'Native'];
 const SPEAKING_SPEEDS = ['Slow', 'Normal', 'Fast'];
@@ -16,74 +14,6 @@ const ClickableWord = ({ word, onTap }) => (
     <Text style={styles.clickableWord}>{word}</Text>
   </TouchableOpacity>
 );
-
-const AudioWave = ({ isListening, isSpeaking }) => {
-  const bars = 7; // Number of bars in the wave
-  const animations = useRef(Array(bars).fill(0).map(() => new Animated.Value(0))).current;
-
-  useEffect(() => {
-    if (isListening || isSpeaking) {
-      // Create a continuous animation for each bar
-      const animateBars = () => {
-        const animations = Array(bars).fill(0).map(() => {
-          return Animated.sequence([
-            Animated.timing(new Animated.Value(0), {
-              toValue: 1,
-              duration: 300 + Math.random() * 200, // Random duration between 300-500ms
-              useNativeDriver: true,
-            }),
-            Animated.timing(new Animated.Value(1), {
-              toValue: 0,
-              duration: 300 + Math.random() * 200,
-              useNativeDriver: true,
-            }),
-          ]);
-        });
-
-        Animated.stagger(100, animations).start(() => {
-          if (isListening || isSpeaking) {
-            animateBars();
-          }
-        });
-      };
-
-      animateBars();
-    } else {
-      // Reset all bars to 0 when not listening/speaking
-      animations.forEach(anim => anim.setValue(0));
-    }
-  }, [isListening, isSpeaking]);
-
-  return (
-    <View style={styles.waveformContainer}>
-      <View style={styles.waveform}>
-        {animations.map((anim, index) => (
-          <Animated.View
-            key={index}
-            style={[
-              styles.waveformBar,
-              {
-                transform: [{
-                  scaleY: anim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.3, 1],
-                  }),
-                }],
-                opacity: anim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [0.3, 1],
-                }),
-              },
-            ]}
-          />
-        ))}
-      </View>
-      <Text style={styles.waveformText}>
-        {isSpeaking ? 'App is speaking...' : 'Listening...'}
-      </Text>
-    </View>
-  );
-};
 
 const SpeakScreen = () => {
   const navigation = useNavigation();
@@ -107,19 +37,14 @@ const SpeakScreen = () => {
   const [selectedFreeLanguage, setSelectedFreeLanguage] = useState(null);
   const [showLanguageMenu, setShowLanguageMenu] = useState(false);
   const [translationTag, setTranslationTag] = useState({ visible: false, word: '', translation: '', position: { x: 0, y: 0 } });
+  const [speakingAccuracy, setSpeakingAccuracy] = useState(0);
+  const [currentAccuracy, setCurrentAccuracy] = useState(100); // Real-time accuracy bar
 
   // Add refs for timer and conversation tracking
   const scrollViewRef = useRef(null);
   const timerRef = useRef(null);
   const conversationStartTimeRef = useRef(null);
   const isConversationActiveRef = useRef(false);
-
-  // Placeholder metrics - replace with real data later
-  const [metrics, setMetrics] = useState({
-    pronunciation: 85,
-    grammar: 90,
-    complexity: 75,
-  });
 
   // Function to start conversation timer
   const startConversationTimer = () => {
@@ -277,11 +202,8 @@ const SpeakScreen = () => {
     setUserInput('');
     setConversationStarted(false);
     setSelectedFreeLanguage(null);
-    setMetrics({
-      pronunciation: 85,
-      grammar: 90,
-      complexity: 75,
-    });
+    setSpeakingAccuracy(0);
+    setCurrentAccuracy(100); // Reset real-time accuracy
     // Stop timer if running
     stopConversationTimer();
   }, []);
@@ -300,7 +222,7 @@ const SpeakScreen = () => {
     };
   }, []);
 
-  // Generate the lesson prompt with target language
+  // Generate the lesson prompt with target language and accuracy tracking
   const generateLessonPrompt = () => {
     // Determine the target language
     let targetLanguage = 'English'; // default
@@ -323,7 +245,28 @@ const SpeakScreen = () => {
 IMPORTANT: After each response, provide an English translation in parentheses. Format your responses like this:
 "Hello, how are you today? (Hello, how are you today?)"
 
-This helps the user understand what you're saying.`;
+CRITICAL - ACCURACY TRACKING: You must evaluate the user's language accuracy throughout the conversation. For each user message, assess:
+1. Spelling errors (deduct 5-10 points per error)
+2. Grammar mistakes (deduct 10-15 points per error)
+3. Vocabulary misuse (deduct 5-10 points per error)
+4. Sentence structure issues (deduct 5-15 points per error)
+
+Start with 100 points and subtract for each error found. Track this throughout the conversation.
+
+After each user message, provide a brief accuracy update in this format: "ACCURACY_UPDATE: [current_score]"
+
+SPECIAL INSTRUCTION: If the user message is "END_CONVERSATION_REQUEST_FINAL_ACCURACY", provide ONLY the final accuracy score based on ALL errors found during the entire conversation. Format: "END_CONVERSATION_ACCURACY: [final_score]"
+
+When the conversation ends naturally, provide the final accuracy score based on ALL errors found during the entire conversation. Format: "END_CONVERSATION_ACCURACY: [final_score]"
+
+Example scoring:
+- Perfect message: 100 points
+- 1 spelling error: 90-95 points
+- 2 grammar errors: 70-80 points
+- Multiple errors: 50-70 points
+- Very poor: 20-50 points
+
+This helps the user understand what you're saying and provides accurate feedback on their performance.`;
     }
 
     // Lesson mode
@@ -337,6 +280,33 @@ This helps the user understand what you're saying.`;
     let prompt = lesson.rolePlayPrompt
       .replace('_______', randomVocab)
       .replace('the target language', targetLanguage);
+
+    // Add accuracy tracking to lesson mode as well
+    prompt += `
+
+IMPORTANT: After each response, provide an English translation in parentheses. Format your responses like this:
+"Hello, how are you today? (Hello, how are you today?)"
+
+CRITICAL - ACCURACY TRACKING: You must evaluate the user's language accuracy throughout the conversation. For each user message, assess:
+1. Spelling errors (deduct 5-10 points per error)
+2. Grammar mistakes (deduct 10-15 points per error)
+3. Vocabulary misuse (deduct 5-10 points per error)
+4. Sentence structure issues (deduct 5-15 points per error)
+
+Start with 100 points and subtract for each error found. Track this throughout the conversation.
+
+After each user message, provide a brief accuracy update in this format: "ACCURACY_UPDATE: [current_score]"
+
+SPECIAL INSTRUCTION: If the user message is "END_CONVERSATION_REQUEST_FINAL_ACCURACY", provide ONLY the final accuracy score based on ALL errors found during the entire conversation. Format: "END_CONVERSATION_ACCURACY: [final_score]"
+
+When the conversation ends naturally, provide the final accuracy score based on ALL errors found during the entire conversation. Format: "END_CONVERSATION_ACCURACY: [final_score]"
+
+Example scoring:
+- Perfect message: 100 points
+- 1 spelling error: 90-95 points
+- 2 grammar errors: 70-80 points
+- Multiple errors: 50-70 points
+- Very poor: 20-50 points`;
 
     return prompt;
   };
@@ -376,12 +346,23 @@ This helps the user understand what you're saying.`;
           </View>
         );
       } else {
-        // Regular line without translation
-        return (
-          <View key={lineIndex} style={styles.transcriptionLine}>
-            {renderWords(line, lineIndex, 'regular')}
-          </View>
-        );
+        // Regular line without translation - could be user or bot text
+        // Check if it's a user message (starts with "You:")
+        if (line.trim().startsWith('You:')) {
+          // Render user text as a single continuous line
+          return (
+            <View key={lineIndex} style={styles.transcriptionLine}>
+              <Text style={styles.transcriptionText}>{line}</Text>
+            </View>
+          );
+        } else {
+          // Bot text or other content - render normally
+          return (
+            <View key={lineIndex} style={styles.transcriptionLine}>
+              <Text style={styles.transcriptionText}>{line}</Text>
+            </View>
+          );
+        }
       }
     });
   };
@@ -401,7 +382,7 @@ This helps the user understand what you're saying.`;
                     !word.includes('App:') && 
                     !word.includes('You:') &&
                     word.length > 1 &&
-                    type === 'original'; // Only make words clickable in original text
+                    type === 'original'; // Only make words clickable in original text (bot responses with translations)
       
       if (isWord) {
         return <ClickableWord key={`${lineIndex}-${wordIndex}`} word={word} onTap={handleWordTap} />;
@@ -421,10 +402,43 @@ This helps the user understand what you're saying.`;
 
   const toggleListening = async () => {
     if (isListening) {
-      // Stop listening and show results
+      // Stop listening and get final accuracy score
       setIsListening(false);
       setIsSpeaking(false);
       setConversationStarted(false);
+      
+      // Get final accuracy score before stopping
+      try {
+        const lessonPrompt = generateLessonPrompt();
+        const payload = {
+          prompt: lessonPrompt,
+          history: [],
+          userMessage: 'END_CONVERSATION_REQUEST_FINAL_ACCURACY'
+        };
+        
+        const response = await fetch('http://localhost:5001/convo', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload),
+        });
+        
+        if (response.ok) {
+          const data = await response.json();
+          let content = data.content || '';
+          
+          // Check for accuracy score in the response
+          const accuracyMatch = content.match(/END_CONVERSATION_ACCURACY:\s*(\d+)/);
+          if (accuracyMatch) {
+            const accuracyScore = parseInt(accuracyMatch[1]);
+            console.log('Final accuracy score:', accuracyScore);
+            setSpeakingAccuracy(accuracyScore);
+          }
+        }
+      } catch (error) {
+        console.error('Error getting final accuracy score:', error);
+      }
       
       // Stop timer and update database
       stopConversationTimer();
@@ -449,6 +463,8 @@ This helps the user understand what you're saying.`;
       setConversationStarted(false);
       setTranscription('');
       setSpeakingTime(0);
+      setSpeakingAccuracy(0);
+      setCurrentAccuracy(100); // Reset real-time accuracy
       
       // Start conversation timer
       startConversationTimer();
@@ -473,6 +489,26 @@ This helps the user understand what you're saying.`;
         }
         const data = await response.json();
         let content = data.content || '';
+        
+        // Check for accuracy score in the response
+        const accuracyMatch = content.match(/END_CONVERSATION_ACCURACY:\s*(\d+)/);
+        if (accuracyMatch) {
+          const accuracyScore = parseInt(accuracyMatch[1]);
+          setSpeakingAccuracy(accuracyScore);
+          // Remove the accuracy line from the content
+          content = content.replace(/END_CONVERSATION_ACCURACY:\s*\d+.*$/, '').trim();
+        }
+        
+        // Check for real-time accuracy updates
+        const accuracyUpdateMatch = content.match(/ACCURACY_UPDATE:\s*(\d+)/);
+        if (accuracyUpdateMatch) {
+          const currentScore = parseInt(accuracyUpdateMatch[1]);
+          console.log('Real-time accuracy update:', currentScore);
+          setCurrentAccuracy(currentScore);
+          // Remove the accuracy update line from the content
+          content = content.replace(/ACCURACY_UPDATE:\s*\d+.*$/, '').trim();
+        }
+        
         if (content.trim().endsWith('END 2515')) {
           content = content.replace(/END 2515$/, '').trim();
           let cleanContent = content.replace(/([^\n])\n([^\n])/g, '$1 $2'); // Replace single newlines between words with spaces
@@ -514,14 +550,11 @@ This helps the user understand what you're saying.`;
     // Reset all conversation-related state
     setTranscription('');
     setSpeakingTime(0);
-    setMetrics({
-      pronunciation: 0,
-      grammar: 0,
-      complexity: 0,
-    });
+    setSpeakingAccuracy(0);
     setShowResults(false);
     setIsListening(false);
     setIsSpeaking(false);
+    setCurrentAccuracy(100); // Reset real-time accuracy
     
     // Stop timer if running
     stopConversationTimer();
@@ -587,6 +620,27 @@ This helps the user understand what you're saying.`;
 
       const data = await response.json();
       let content = data.content || '';
+      
+      // Check for accuracy score in the response
+      const accuracyMatch = content.match(/END_CONVERSATION_ACCURACY:\s*(\d+)/);
+      if (accuracyMatch) {
+        const accuracyScore = parseInt(accuracyMatch[1]);
+        console.log('Found accuracy score:', accuracyScore);
+        setSpeakingAccuracy(accuracyScore);
+        // Remove the accuracy line from the content
+        content = content.replace(/END_CONVERSATION_ACCURACY:\s*\d+.*$/, '').trim();
+      }
+      
+      // Check for real-time accuracy updates
+      const accuracyUpdateMatch = content.match(/ACCURACY_UPDATE:\s*(\d+)/);
+      if (accuracyUpdateMatch) {
+        const currentScore = parseInt(accuracyUpdateMatch[1]);
+        console.log('Real-time accuracy update:', currentScore);
+        setCurrentAccuracy(currentScore);
+        // Remove the accuracy update line from the content
+        content = content.replace(/ACCURACY_UPDATE:\s*\d+.*$/, '').trim();
+      }
+      
       if (content.trim().endsWith('END 2515')) {
         content = content.replace(/END 2515$/, '').trim();
         let cleanContent = content.replace(/([^\n])\n([^\n])/g, '$1 $2'); // Replace single newlines between words with spaces
@@ -673,47 +727,15 @@ This helps the user understand what you're saying.`;
               </View>
 
               <View style={styles.metricItem}>
-                <Icon name="microphone" size={24} color="#007AFF" />
-                <Text style={styles.metricLabel}>Pronunciation</Text>
+                <Icon name="target" size={24} color="#007AFF" />
+                <Text style={styles.metricLabel}>Speaking Accuracy</Text>
                 <View style={styles.scoreContainer}>
-                  <Text style={styles.metricValue}>{metrics.pronunciation}%</Text>
+                  <Text style={styles.metricValue}>{speakingAccuracy}%</Text>
                   <View style={styles.scoreBar}>
                     <View 
                       style={[
                         styles.scoreFill, 
-                        { width: `${metrics.pronunciation}%` }
-                      ]} 
-                    />
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.metricItem}>
-                <Icon name="book" size={24} color="#007AFF" />
-                <Text style={styles.metricLabel}>Grammar</Text>
-                <View style={styles.scoreContainer}>
-                  <Text style={styles.metricValue}>{metrics.grammar}%</Text>
-                  <View style={styles.scoreBar}>
-                    <View 
-                      style={[
-                        styles.scoreFill, 
-                        { width: `${metrics.grammar}%` }
-                      ]} 
-                    />
-                  </View>
-                </View>
-              </View>
-
-              <View style={styles.metricItem}>
-                <Icon name="chart-line" size={24} color="#007AFF" />
-                <Text style={styles.metricLabel}>Complexity</Text>
-                <View style={styles.scoreContainer}>
-                  <Text style={styles.metricValue}>{metrics.complexity}%</Text>
-                  <View style={styles.scoreBar}>
-                    <View 
-                      style={[
-                        styles.scoreFill, 
-                        { width: `${metrics.complexity}%` }
+                        { width: `${speakingAccuracy}%` }
                       ]} 
                     />
                   </View>
@@ -734,48 +756,6 @@ This helps the user understand what you're saying.`;
       </Modal>
     </Portal>
   );
-
-  useEffect(() => {
-    let isMounted = true;
-
-    const setupAudio = async () => {
-      try {
-        // Request permissions
-        const { status } = await Audio.requestPermissionsAsync();
-        if (status !== 'granted') {
-          Alert.alert(
-            'Permission Required',
-            'Please grant microphone access to use the speaking feature.',
-            [{ text: 'OK' }]
-          );
-          return;
-        }
-
-        // Configure audio mode with correct constant values
-        await Audio.setAudioModeAsync({
-          allowsRecordingIOS: true,
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: true,
-          interruptionModeIOS: 1, // 1 = DoNotMix
-          interruptionModeAndroid: 1, // 1 = DoNotMix
-          shouldDuckAndroid: true,
-        });
-      } catch (err) {
-        console.error('Error setting up audio:', err);
-        Alert.alert('Error', 'Failed to set up audio recording. Please try again.');
-      }
-    };
-
-    setupAudio();
-
-    return () => {
-      isMounted = false;
-      // Cleanup using ref instead of state
-      if (recordingRef.current) {
-        recordingRef.current.stopAndUnloadAsync();
-      }
-    };
-  }, []);
 
   return (
     <TouchableOpacity 
@@ -843,19 +823,17 @@ This helps the user understand what you're saying.`;
         )}
       </View>
 
-      {/* Mic Button / Waveform */}
-      <View style={styles.micContainer}>
-        {isListening ? (
-          <AudioWave isListening={isListening} isSpeaking={isSpeaking} />
-        ) : (
+      {/* Start Conversation Button */}
+      {!conversationStarted && (
+        <View style={styles.micContainer}>
           <TouchableOpacity
             style={styles.micButton}
             onPress={toggleListening}
           >
-            <Icon name="microphone" size={60} color="#007AFF" />
+            <Icon name="chat" size={60} color="#007AFF" />
           </TouchableOpacity>
-        )}
-      </View>
+        </View>
+      )}
 
       {/* Text Input Area */}
       {conversationStarted && (
@@ -880,7 +858,7 @@ This helps the user understand what you're saying.`;
       )}
 
       {/* Transcription Area */}
-      <Surface style={styles.transcriptionContainer}>
+      <View style={styles.transcriptionContainer}>
         {/* Speaking Time Indicator */}
         {isConversationActiveRef.current && (
           <View style={styles.timeIndicator}>
@@ -890,6 +868,22 @@ This helps the user understand what you're saying.`;
             </Text>
           </View>
         )}
+        
+        {/* Accuracy Bar - Pinned at top */}
+        {conversationStarted && (
+          <View style={styles.accuracyBarContainer}>
+            <Text style={styles.accuracyLabel}>Accuracy:</Text>
+            <View style={styles.scoreBar}>
+              <View 
+                style={[
+                  styles.scoreFill, 
+                  { width: `${currentAccuracy}%` }
+                ]} 
+              />
+            </View>
+          </View>
+        )}
+        
         <ScrollView 
           ref={scrollViewRef}
           style={styles.transcriptionScrollView}
@@ -902,22 +896,24 @@ This helps the user understand what you're saying.`;
               renderTranscription(transcription)
             ) : (
               <Text style={styles.transcriptionText}>
-                Start speaking or typing to see the conversation here...
+                Hit the circle button above to start a conversation...
               </Text>
             )}
           </View>
         </ScrollView>
-      </Surface>
+      </View>
 
-      {/* Stop Button (only shown when listening) */}
-      {isListening && (
+
+
+      {/* Stop Button (only shown when conversation is active) */}
+      {conversationStarted && (
         <Button
           mode="contained"
           onPress={toggleListening}
           style={styles.stopButton}
           icon="stop"
         >
-          Stop
+          End Conversation
         </Button>
       )}
 
@@ -981,48 +977,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     elevation: 4,
   },
-  waveformContainer: {
-    width: '100%',
-    alignItems: 'center',
-    padding: 20,
-  },
-  waveform: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: 100,
-    width: '100%',
-    maxWidth: 300,
-  },
-  waveformBar: {
-    width: 4,
-    height: 40,
-    backgroundColor: '#007AFF',
-    marginHorizontal: 3,
-    borderRadius: 2,
-  },
-  waveformText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: '#666',
-    textAlign: 'center',
-  },
+
   transcriptionContainer: {
-    marginTop: 10,
+    marginTop: 5,
     padding: 15,
     borderRadius: 12,
-    elevation: 2,
-    minHeight: 200,
-    maxHeight: 400,
+    minHeight: 150,
+    maxHeight: 300,
     flex: 1,
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   timeIndicator: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E0E0',
     marginBottom: 10,
   },
   timeText: {
@@ -1037,9 +1008,11 @@ const styles = StyleSheet.create({
   transcriptionText: {
     fontSize: 16,
     lineHeight: 24,
+    color: '#333',
   },
   transcriptionTextContainer: {
     flexDirection: 'column',
+    paddingBottom: 10,
   },
   transcriptionLine: {
     flexDirection: 'column',
@@ -1099,6 +1072,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
     backgroundColor: '#FF3B30',
   },
+
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.5)',
@@ -1215,6 +1189,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#666',
     lineHeight: 20,
+  },
+  accuracyBarContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    marginTop: 5,
+  },
+  accuracyLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#333',
+    marginRight: 10,
+    minWidth: 70,
   },
 });
 

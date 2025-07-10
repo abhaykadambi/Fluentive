@@ -2,8 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import axios from 'axios';
 import React, { useEffect, useState } from 'react';
-import { Image, ScrollView, StyleSheet, TouchableOpacity, View } from 'react-native';
-import { Avatar, Button, Divider, Surface, Text, TextInput } from 'react-native-paper';
+import { ScrollView, StyleSheet, View } from 'react-native';
+import { Button, Divider, Surface, Text, TextInput } from 'react-native-paper';
 import Icon from 'react-native-vector-icons/MaterialCommunityIcons';
 
 const ProfileScreen = () => {
@@ -13,19 +13,12 @@ const ProfileScreen = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
-  const [profileImage, setProfileImage] = useState(null);
 
   // Mock data - replace with real data from backend
   const [stats, setStats] = useState({
     totalSpeakingTime: 0, // in minutes
     mostAdvancedLanguage: 'None',
     languages: [],
-    badges: [
-      { id: 1, name: 'First Steps', icon: 'star', description: 'Completed your first conversation', earned: true },
-      { id: 2, name: 'Language Explorer', icon: 'earth', description: 'Learned 3 different languages', earned: true },
-      { id: 3, name: 'Consistent Learner', icon: 'calendar-check', description: 'Practiced for 7 days straight', earned: false },
-      { id: 4, name: 'Master Speaker', icon: 'trophy', description: 'Achieved advanced level in any language', earned: false },
-    ]
   });
 
   useEffect(() => {
@@ -37,7 +30,6 @@ const ProfileScreen = () => {
           setUserData(parsedData);
           setName(parsedData.username || parsedData.name || '');
           setEmail(parsedData.email || '');
-          setProfileImage(parsedData.profileImage);
           
           // Calculate total speaking time from languages
           const totalTime = parsedData.languages?.reduce((acc, lang) => acc + (lang.speakingTime || 0), 0) || 0;
@@ -77,7 +69,6 @@ const ProfileScreen = () => {
             setUserData(parsedData);
             setName(parsedData.username || parsedData.name || '');
             setEmail(parsedData.email || '');
-            setProfileImage(parsedData.profileImage);
             
             // Calculate total speaking time from languages
             const totalTime = parsedData.languages?.reduce((acc, lang) => acc + (lang.speakingTime || 0), 0) || 0;
@@ -124,7 +115,6 @@ const ProfileScreen = () => {
         {
           name,
           email,
-          profileImage,
         },
         {
           headers: {
@@ -143,52 +133,8 @@ const ProfileScreen = () => {
     }
   };
 
-  const handleImagePick = async () => {
-    // TODO: Implement image picker
-    // This will be implemented when we add image upload functionality
-    console.log('Image picker to be implemented');
-  };
-
-  const renderBadge = (badge) => (
-    <Surface key={badge.id} style={[styles.badgeCard, !badge.earned && styles.badgeLocked]}>
-      <Icon 
-        name={badge.icon} 
-        size={24} 
-        color={badge.earned ? '#007AFF' : '#999'} 
-      />
-      <View style={styles.badgeInfo}>
-        <Text style={[styles.badgeName, !badge.earned && styles.badgeLockedText]}>
-          {badge.name}
-        </Text>
-        <Text style={[styles.badgeDescription, !badge.earned && styles.badgeLockedText]}>
-          {badge.description}
-        </Text>
-      </View>
-      {!badge.earned && (
-        <Icon name="lock" size={20} color="#999" style={styles.lockIcon} />
-      )}
-    </Surface>
-  );
-
   return (
     <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={handleImagePick} style={styles.profileImageContainer}>
-          {profileImage ? (
-            <Image source={{ uri: profileImage }} style={styles.profileImage} />
-          ) : (
-            <Avatar.Icon 
-              size={100} 
-              icon="account" 
-              style={styles.profileImagePlaceholder}
-            />
-          )}
-          <View style={styles.editIconContainer}>
-            <Icon name="camera" size={20} color="#fff" />
-          </View>
-        </TouchableOpacity>
-      </View>
-
       <View style={styles.formContainer}>
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
         {success ? <Text style={styles.successText}>{success}</Text> : null}
@@ -254,11 +200,6 @@ const ProfileScreen = () => {
             </View>
           </Surface>
         </View>
-
-        <View style={styles.badgesContainer}>
-          <Text style={styles.sectionTitle}>Achievements</Text>
-          {stats.badges.map(renderBadge)}
-        </View>
       </View>
     </ScrollView>
   );
@@ -268,35 +209,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff',
-  },
-  header: {
-    alignItems: 'center',
-    paddingVertical: 20,
-    backgroundColor: '#f8f9fa',
-  },
-  profileImageContainer: {
-    position: 'relative',
-  },
-  profileImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-  },
-  profileImagePlaceholder: {
-    backgroundColor: '#e1e1e1',
-  },
-  editIconContainer: {
-    position: 'absolute',
-    bottom: 0,
-    right: 0,
-    backgroundColor: '#007AFF',
-    borderRadius: 15,
-    width: 30,
-    height: 30,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
   },
   formContainer: {
     padding: 20,
@@ -354,39 +266,6 @@ const styles = StyleSheet.create({
   statLabel: {
     fontSize: 14,
     color: '#666',
-  },
-  badgesContainer: {
-    marginBottom: 20,
-  },
-  badgeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 15,
-    marginBottom: 10,
-    borderRadius: 12,
-    elevation: 2,
-  },
-  badgeLocked: {
-    backgroundColor: '#f5f5f5',
-  },
-  badgeInfo: {
-    marginLeft: 15,
-    flex: 1,
-  },
-  badgeName: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  badgeDescription: {
-    fontSize: 14,
-    color: '#666',
-  },
-  badgeLockedText: {
-    color: '#999',
-  },
-  lockIcon: {
-    marginLeft: 10,
   },
 });
 
